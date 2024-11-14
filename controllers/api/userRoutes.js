@@ -1,61 +1,75 @@
-const router = require('express').Router();
+const express = require('express');
+const bcrypt = require('bcrypt');
+const router = express.Router();
 const { User } = require('../../models');
 
-router.post('/', async (req, res) => {
+// SignUp route
+router.post('/signup', async (req, res) => {
   try {
-    const userData = await User.create(req.body);
-
-    req.session.save(() => {
-      req.session.user_id = userData.id;
-      req.session.logged_in = true;
-
-      res.status(200).json(userData);
+    const { username, email, password } = req.body;
+    const user = await User.create({
+      username,
+      email,
+      password
     });
-  } catch (err) {
-    res.status(400).json(err);
+    req.session.userId = user.id; // Store the user ID in session
+    req.session.save(err => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.status(500).send('Failed to save session.');
+      }
+      res.redirect('/dashboard'); // Redirect to dashboard after signup
+    });
+  } catch (error) {
+    console.error('Signup error:', error);
+    res
+      .status(400)
+      .render('signup', { error: 'Signup failed. Please try again.' });
   }
 });
 
+// Login route
 router.post('/login', async (req, res) => {
   try {
-    const userData = await User.findOne({ where: { email: req.body.email } });
-
-    if (!userData) {
-      res
-        .status(400)
-        .json({ message: 'Incorrect email or password, please try again' });
-      return;
+    console.log('Login request body:', req.body);
+    
+    if (!req.body.email || !req.body.password) {
+      return res.status(400).json({ message: 'Missing required fields' });
     }
+    
+    const { email, password } = req.body;
 
-    const validPassword = await userData.checkPassword(req.body.password);
+    const user = await User.findOne({ where: { email } });
 
-    if (!validPassword) {
-      res
-        .status(400)
-        .json({ message: 'Incorrect email or password, please try again' });
-      return;
-    }
-
-    req.session.save(() => {
-      req.session.user_id = userData.id;
+    if (user && await user.checkPassword(password)) {
+      req.session.userId = user.id;
       req.session.logged_in = true;
-      
-      res.json({ user: userData, message: 'You are now logged in!' });
-    });
 
-  } catch (err) {
-    res.status(400).json(err);
+      // Store success message in the session
+      req.session.message = 'You are now logged in!';
+      req.session.save(() => {
+        // Redirect to dashboard after successful login
+        res.redirect('/dashboard');
+      });
+    } else {
+      res.status(400).json({ error: 'Invalid password or email.' });
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed. Please try again.' });
   }
 });
 
+// Logout route
 router.post('/logout', (req, res) => {
-  if (req.session.logged_in) {
-    req.session.destroy(() => {
-      res.status(204).end();
-    });
-  } else {
-    res.status(404).end();
-  }
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Session destroy error:', err);
+      return res.redirect('/dashboard');
+    }
+    res.clearCookie('connect.sid');
+    res.redirect('/login');
+  });
 });
 
 module.exports = router;
