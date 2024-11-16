@@ -73,7 +73,7 @@ To deploy the application using Render:
 
 ## Deployed Application
 
-https://tech-blog-3njp.onrender.com
+https://challenge14-techblog-ajkk.onrender.com
 
 ## License
 
